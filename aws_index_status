@@ -1,0 +1,119 @@
+#!/usr/local/bin/python
+
+__author__  = "Andrew Livesay"
+__license__ = "Public Domain"
+
+import argparse
+import json
+import os
+
+QUEUE_DIR = '/iiidb/aws/queues/'
+
+QUEUE_FILES = [os.path.join(QUEUE_DIR, f) for f in ['lucenequeue',
+                                                    'lucenequeue.2',
+                                                    'lucenequeue.work']]
+
+
+def lsof_pids(filename):
+    found_pids = []
+
+    pids=os.listdir('/proc')
+    for pid in sorted(pids):
+        try:
+            int(pid)
+        except ValueError:
+            continue
+
+        fd_dir=os.path.join('/proc', pid, 'fd')
+
+        try:
+            for file in os.listdir(fd_dir):
+                link=os.readlink(os.path.join(fd_dir, file))
+                if link == filename:
+                    found_pids.append(pid)
+        except OSError:
+            continue
+
+    return found_pids
+
+
+def line_count(filename):
+  i=-1
+  with open(filename) as f:
+    for i,l in enumerate(f):
+        pass
+  return i + 1
+
+
+class AWSIndexStatusJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, AWSIndexStatus):
+            return {'filename' : obj.filename, 
+                    'line_count' : obj.line_count,
+                    'size' : obj.size,
+                    'pids' : obj.pids}
+
+        return json.JSONEncoder.default(self, obj)
+
+
+class AWSIndexStatus:
+    def __init__(self, filename):
+        self.update(filename)
+
+    def update(self, filename):
+        self.filename = filename
+        self.line_count = line_count(filename)
+        self.size = os.stat(filename).st_size
+        self.pids = lsof_pids(filename)
+
+
+class AWSIndexStatusQuery:
+
+    def __init__(self, filenames):
+        self.filenames = filenames
+        self.query()
+
+    def query(self):
+        self.results = []
+        for f in self.filenames:
+            if (os.path.isfile(f)):
+               self.results.append(AWSIndexStatus(f))
+
+    def __str__(self):
+
+        if not self.results:
+            return "No active index files found.\n"
+
+        filename_column_width = max(len(max(self.results, key=lambda x: len(x.filename)).filename), len('FILENAME'))
+        pid_column_width = max(len(','.join(max(self.results, key=lambda x: len(','.join(x.pids))).pids)), len('PIDS'))
+
+        output = "{0:>{1}}\t{2:>12}\t{3:>9}\t{4:>{5}}\n".format('FILENAME',
+                                                                filename_column_width,
+                                                                'LCOUNT',
+                                                                'SIZE',
+                                                                'PIDS',
+                                                                pid_column_width)
+        for row in self.results:
+            output += "{0:{1}}\t{2:>12}\t{3:>9}\t{4:>{5}}\n".format(row.filename,
+                                                                    filename_column_width,
+                                                                    row.line_count,
+                                                                    row.size,
+                                                                    ','.join(row.pids) or '-',
+                                                                    pid_column_width)
+
+        return output
+
+
+    def json_encode(self):
+        return json.dumps(self.results, cls=AWSIndexStatusJSONEncoder, sort_keys=True, indent=4)
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Query AWS indexing status.')
+    parser.add_argument('--json', help='output status as JSON', action='store_true', default=False, dest='output_json')
+
+    if parser.parse_args().output_json:
+        print AWSIndexStatusQuery(QUEUE_FILES).json_encode()
+    else:
+        print AWSIndexStatusQuery(QUEUE_FILES)
