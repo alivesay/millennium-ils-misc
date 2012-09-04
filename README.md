@@ -1,4 +1,4 @@
 millennium-ils-misc
 ===================
 
-Collection of scripts useful for working Millennium ILS
+Collection of scripts useful for working with Millennium ILS
