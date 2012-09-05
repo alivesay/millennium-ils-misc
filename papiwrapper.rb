@@ -58,9 +58,8 @@ module PAPIWrapper
 
   def self.load_patron_dump(pnumber)
 
-    url = 
-URI.parse("https://#{PATRON_API_SERVER}:#{PATRON_API_PORT}/PATRONAPI/#{pnumber}/dump")
-   p url
+    url = URI.parse("https://#{PATRON_API_SERVER}:#{PATRON_API_PORT}/PATRONAPI/#{pnumber}/dump")
+    p url
     req = Net::HTTP::Get.new(url.path)
 
     http = Net::HTTP.new(url.host, url.port)
