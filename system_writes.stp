@@ -1,0 +1,17 @@
+#! /usr/bin/env stap
+
+global syscalls
+
+probe vfs.write.return {
+    syscalls[execname()]++
+}
+
+probe timer.s(10) {
+    printf ("%-10s %-s\n", "#write()", "execname")
+    foreach (_name in syscalls- limit 50)
+        printf("%-10d %-s\n", syscalls[_name],_name)
+
+    printf ("\n")
+
+    delete syscalls
+}

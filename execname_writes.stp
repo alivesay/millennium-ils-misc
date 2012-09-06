@@ -1,0 +1,20 @@
+#! /usr/bin/env stap
+
+# USAGE:    execname_writes.stp EXECNAME
+
+global syscalls
+
+probe vfs.write.return {
+    if (execname() == @1)
+        syscalls[d_name($file->f_dentry)]++
+}
+
+probe timer.s(10) {
+    printf ("%-10s %-s\n", "#write()", "nameidata")
+    foreach (_name in syscalls- limit 50)
+        printf("%-10d %-s\n", syscalls[_name],_name)
+
+    printf ("\n")
+
+    delete syscalls
+}
