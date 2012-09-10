@@ -1,0 +1,18 @@
+#! /usr/bin/env stap
+
+global syscalls
+
+probe ioblock.request {
+    if(bio_rw_num(rw) == BIO_WRITE)
+        syscalls[devname, execname()]++
+}
+
+probe timer.s(10) {
+    printf ("%-10s %-s\n", "#ioblock.request()", "execname")
+    foreach ([_devname, _execname] in syscalls- limit 50)
+        printf("%-10d %-20s \t%-20s\n", syscalls[_devname, _execname], _devname, _execname)
+
+    printf ("\n")
+
+    delete syscalls
+}
