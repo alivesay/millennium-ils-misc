@@ -1,0 +1,127 @@
+#!/usr/bin/env python
+
+import urllib2
+import re
+import pprint
+import argparse
+from StringIO import StringIO
+
+class PAPIWrapper(object):
+
+  FIELD_MAP = { 'REC INFO'      : 'record_info',
+                'EXP DATE'      : 'expiration_date',
+                'PCODE1'        : 'patron_code1',
+                'PCODE2'        : 'patron_code2',
+                'PCODE3'        : 'patron_code3',
+                'P TYPE'        : 'p_type',
+                'TOT CHKOUT'    : 'total_checkouts',
+                'TOT RENWAL'    : 'total_renewals',
+                'CUR CHKOUT'    : 'current_checkouts',
+                'BIRTH DATE'    : 'birthday',
+                'HOME LIBR'     : 'home_library',
+                'PMESSAGE'      : 'patron_message',
+                'MBLOCK'        : 'mblock',
+                'REC TYPE'      : 'record_type',
+                'RECORD #'      : 'record_number',
+                'REC LENG'      : 'record_length',
+                'CREATED'       : 'created_on',
+                'UPDATED'       : 'updated_on',
+                'REVISIONS'     : 'revisions',
+                'AGENCY'        : 'agency',
+                'CL RTRND'      : 'claimed_returned',
+                'MONEY OWED'    : 'money_owed',
+                'CUR ITEMA'     : 'current_item_a',
+                'CUR ITEMB'     : 'current_item_b',
+                'CUR ITEMC'     : 'current_item_c',
+                'CUR ITEMD'     : 'current_item_d',
+                'CIRCACTIVE'    : 'last_circ_activity_on',
+                'NOTICE PREF'   : 'notice_preference',
+                'PATRN NAME'    : 'patron_name',
+                'ADDRESS'       : 'address',
+                'TELEPHONE'     : 'telephone',
+                'P BARCODE'     : 'patron_barcode',
+                'PIN'           : 'pin',
+                'HOLD'          : 'hold',
+                'FINE'          : 'fine',
+                'LINK REC'      : 'linked_record' }
+
+	
+  def __init__(self, server, port):
+    self._server = server
+    self._port = port
+
+
+  def getPatronByRecordID(self, id):
+    return self._request('.p%s' % (id))
+
+
+  def getPatronByBarcode(self, barcode):
+    return self._request(barcode)
+
+
+  def _request(self, query):
+    request_url = 'https://%s:%s/PATRONAPI/%s/dump' % (self._server, self._port, query)
+
+    request = urllib2.Request(request_url)
+		
+    response = urllib2.urlopen(request)
+		
+    return self._parse_response(response.read())
+
+	
+  def _parse_response(self, response):
+
+    if 'ERRMSG' in response:
+      raise Exception(re.match('.*(ERRMSG=)(.+)(<BR>)', response, re.DOTALL).group(2).upper())
+
+    patron = {}
+
+    buf = StringIO(response)
+		
+    while True:
+      line = buf.readline()
+      if not line: break
+
+      pos = line.find(']=')
+      matched = re.match('(.+)(?=\<)', line[pos+2:])
+
+      if matched:
+        key = line[0:line.find('[')]
+				
+        if key in PAPIWrapper.FIELD_MAP:
+          field = PAPIWrapper.FIELD_MAP[key]
+          patron[field] = matched.group(1)
+				
+    return patron
+
+
+
+def process_args():
+  base_parser = argparse.ArgumentParser(description='Provides a CLI wrapper to query the Millennium PatronAPI.')
+
+  base_parser.add_argument('ID', help='patron record number')
+
+  return base_parser.parse_args()
+
+	
+	
+if __name__ == "__main__":
+  args = process_args()
+	
+  pw = PAPIWrapper('catalog.yourlibrary.com', '54620')
+
+  pp = pprint.PrettyPrinter(indent=4)	
+
+  patron = None
+ 
+  try:
+    try:
+      patron = pw.getPatronByRecordID(args.ID)
+    except:
+      patron = pw.getPatronByBarcode(args.ID)
+  except Exception, e:
+    print 'Error: %s' % str(e)
+  
+
+  if patron:
+    pp.pprint(patron)
